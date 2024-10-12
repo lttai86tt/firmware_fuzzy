@@ -6,11 +6,6 @@
 #include "comms/temp_sensor.h"
 
 RuleType *Rule_Base;
-
-/*
-  Chưa lấy giá trị Input vào 
-  Chưa có Output cụ thể
-*/
 IOType *System_Inputs = NULL;  
 IOType *System_Outputs = NULL;
 
@@ -22,6 +17,19 @@ int max(int a, int b) {
     return a > b ? a : b;
 }
 
+
+/*
+  Compute the degree of menbership of the input to the membership function
+
+  Mức độ thành viên (y)
+    1 |     ________
+      |    /        \
+      |   /          \
+      |  /            \
+      | /              \
+    0 |/_____________________________
+      0   point1    point2    Giá trị đầu vào (x)
+*/
 void compute_degree_of_membership(MFType *mf, int input) {
     int delta_1;
     int delta_2;
@@ -55,19 +63,22 @@ int compute_area_of_trapezoid(MFType *mf) {
     return area > 0 ? area : 0;  // Ensure area non-negative
 }
 
-
 void get_system_inputs() {
-    IOType *temp_input = System_Inputs;
-    while(temp_input != NULL) {
-        if(strcmp(temp_input->name, "pH") == 0) {
-            temp_input->value = getpH();
+    IOType *sensor_input = System_Inputs;
+    while(sensor_input != NULL) {
+        if(strcmp(sensor_input->name, "pH") == 0) {
+            sensor_input->value = getpH();
         } else if(strcmp(temp_input->name, "Temperature") == 0) {
-            temp_input->value = getTemperature();
+            sensor_input->value = getTemperature();
         }
-        temp_input = temp_input->next;
+        sensor_input = sensor_input->next;
     }
 }
 
+/*
+ Initialize the system inputs and their membership functions
+ Check the slope again 
+*/
 void initialize_system() {
     IOType *pH = malloc(sizeof(IOType));
     strcpy(pH->name, "pH"); //
@@ -140,28 +151,27 @@ void fuzzification() {
 
 void rule_evaluation(){
     RuleType *rule;
-    RuleElementType *ip; 
-    RuleElementType *tp; 
+    RuleElementType *ifp; 
+    RuleElementType *thenp; 
     int strength;
 
     for (rule = Rule_Base; rule != NULL; rule = rule->next) {
         strength = UPPER_LIMIT;
+        for (ifp = rule->if_side; ifp != NULL; ifp = ifp->next)
+            strength = min(strength, *(ifp->value));
 
-        for (ip = rule->if_side; ip != NULL; ip = ip->next)
-            strength = min(strength, *(ip->value));
-
-        for (tp = rule->then_side; tp != NULL; tp = tp->next)
-            *(tp->value) = max(strength, *(tp->value));
+        for (thenp = rule->then_side; thenp != NULL; thenp = thenp->next)
+            *(thenp->value) = max(strength, *(thenp->value));
     }
 }
 
 void defuzzification(){
-// Giả sử System_Outputs chứa bốn đầu ra cho hệ thống
+    // Imagine System_Outputs contains 4 output system
     IOType *so;
     MFType *mf;
     int index = 0;
     
-    int defuzzifiedOutputs[4] = {0}; // Để lưu giá trị giải mờ cho mỗi đầu ra
+    int defuzzifiedOutputs[4] = {0}; 
 
     for(so = System_Outputs; so != NULL; so=so->next, index++) {
         int sum_of_products = 0;
