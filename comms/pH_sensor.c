@@ -1,4 +1,4 @@
-#include "pH_sensor.h"
+#include "comms/pH_sensor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>

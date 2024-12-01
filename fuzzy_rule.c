@@ -4,6 +4,7 @@
 #include "fuzzy_rule.h"
 #include "comms/pH_sensor.h"
 #include "comms/temp_sensor.h"
+#include "gpio.h"
 
 RuleType *Rule_Base;
 IOType *System_Inputs = NULL;  
@@ -17,6 +18,17 @@ int max(int a, int b) {
     return a > b ? a : b;
 }
 
+void get_system_inputs() {
+    IOType *sensor_input = System_Inputs;
+    while(sensor_input != NULL) {
+        if(strcmp(sensor_input->name, "pH") == 0) {
+            sensor_input->value = getpH();
+        } else if(strcmp(temp_input->name, "Temperature") == 0) {
+            sensor_input->value = getTemperature();
+        }
+        sensor_input = sensor_input->next;
+    }
+}
 
 /*
   Compute the degree of menbership of the input to the membership function
@@ -44,6 +56,7 @@ void compute_degree_of_membership(MFType *mf, int input) {
     mf->value = min(mf->value, UPPER_LIMIT);
 }
 
+// Compute the area of the trapezoid
 int compute_area_of_trapezoid(MFType *mf) {
     int run_1;
     int run_2;
@@ -61,18 +74,6 @@ int compute_area_of_trapezoid(MFType *mf) {
 
     area = mf->value * (base + top) / 2;
     return area > 0 ? area : 0;  // Ensure area non-negative
-}
-
-void get_system_inputs() {
-    IOType *sensor_input = System_Inputs;
-    while(sensor_input != NULL) {
-        if(strcmp(sensor_input->name, "pH") == 0) {
-            sensor_input->value = getpH();
-        } else if(strcmp(temp_input->name, "Temperature") == 0) {
-            sensor_input->value = getTemperature();
-        }
-        sensor_input = sensor_input->next;
-    }
 }
 
 /*
@@ -115,7 +116,7 @@ void initialize_system() {
     MFType *cold = malloc(sizeof(MFType));
     strcpy(cold->name, "Cold");
     cold->point1 = 0; cold->point2 = 25;
-    cold->slope1 = 1; cold->slope2 = 1;
+    cold->= 1; cold->slope2 = 1;
 
     MFType *hot = malloc(sizeof(MFType));
     strcpy(hot->name, "Hot");
@@ -139,7 +140,7 @@ void initialize_system() {
     // Initialize outputs (e.g., valve acid and valve bazo) and their membership functions
 
     // Outputs initialization code similar to inputs would follow here...
-}
+} 
 
 void fuzzification() {
     IOType *si;
@@ -182,7 +183,7 @@ void defuzzification(){
              sum_of_products += area * centroid;
              sum_of_areas += area;
         }
-        // Giải mờ và lưu giá trị
+
         so->value = sum_of_areas != 0 ? sum_of_products / sum_of_areas : 0;
         defuzzifiedOutputs[index] = so->value;
     }
@@ -192,48 +193,42 @@ void defuzzification(){
 void put_system_outputs() {
     IOType *output;
     for (output = System_Outputs; output != NULL; output = output->next) {
-        // In giá trị đầu ra. Cần điều chỉnh theo yêu cầu cụ thể của hệ thống.
+        // Print output. Adjusting up-to requires the system.
         printf("Output %s: %d\n", output->name, output->value);
     }
 }
 
 void controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput, int coolerOutput) {
+    
+    /*Setting GPIO*/
     const int acidValveRelayPin = 1;
     const int bazoValveRelayPin = 2;
     const int heaterRelayPin = 3;
     const int coolerRelayPin = 4;
 
     if (valveAcidOutput > 0) {
-        turnOnRelay(acidValveRelayPin);
+        //Call function control realy (ON)
     } else {
-        turnOffRelay(acidValveRelayPin);
+        //Off
     }
 
     if (valveBazoOutput > 0) {
-        turnOnRelay(bazoValveRelayPin);
+
     } else {
-        turnOffRelay(bazoValveRelayPin);
+
     }
 
     if (heaterOutput > 0) {
-        turnOnRelay(heaterRelayPin);
+
     } else {
-        turnOffRelay(heaterRelayPin);
+
     }
 
     if (coolerOutput > 0) {
-        turnOnRelay(coolerRelayPin);
+
     } else {
-        turnOffRelay(coolerRelayPin);
+
     }
-}
-// Controlling relays through given output from fuzzy logic
-
-void turnOnRelay(int relayPin) {
-
-}
-
-void turnOffRelay(int relayPin) {
 }
 
 void fuzzy_main(){
@@ -247,11 +242,8 @@ void fuzzy_main(){
         int heaterOutput = 0;
         int coolerOutput = 0;
 
-        // In actual implementation, outputs will be determined by the defuzzification
         put_system_outputs();
 
-        // Control the devices based on defuzzified outputs
         controlDevices(valveAcidOutput, valveBazoOutput, heaterOutput, coolerOutput);
-    }
     }
 }
