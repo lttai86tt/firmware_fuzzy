@@ -4,14 +4,12 @@
 #include <fcntl.h>
 #include <string.h>
 #include <stdbool.h>
-#include "driver/ledc.h"
 #include <unistd.h>
 #include <linux/i2c-dev.h>
 #include <sys/ioctl.h>
 #include <wiringPi.h>
 
 #define LED_PIN     26
-
 
 #define ADS1115_ADDRESS 0x48
 #define CONFIG_REG 0x01
@@ -40,7 +38,7 @@ typedef struct mf_type {
 
 typedef struct io_type {
     char name[MAXNAME];
-    int value;
+    float value;
     MFType *membership_functions;
     struct io_type *next;
 } IOType;
@@ -63,52 +61,52 @@ typedef struct rule_type {
 RuleType *Rule_Base;
 
 
-int file;
+// int file;
 
-int i2c_init(char* filename) {
-    int file;
-    if ((file = open(filename, O_RDWR)) < 0) {
-        perror("Failed to open the i2c bus");
-        exit(1);
-    }
+// int i2c_init(char* filename) {
+//     int file;
+//     if ((file = open(filename, O_RDWR)) < 0) {
+//         perror("Failed to open the i2c bus");
+//         exit(1);
+//     }
 
-    if (ioctl(file, I2C_SLAVE, ADS1115_ADDRESS) < 0) {
-        perror("Failed to acquire bus access and/or talk to slave");
-        exit(1);
-    }
-    return file;
-}
+//     if (ioctl(file, I2C_SLAVE, ADS1115_ADDRESS) < 0) {
+//         perror("Failed to acquire bus access and/or talk to slave");
+//         exit(1);
+//     }
+//     return file;
+// }
 
-void ads1115_configure() {
-    char config[3] = {0};
-    config[0] = CONFIG_REG;
-    config[1] = 0xC2; 
-    config[2] = 0x83; 
-    write(file, config, 3);
-}
+// void ads1115_configure() {
+//     char config[3] = {0};
+//     config[0] = CONFIG_REG;
+//     config[1] = 0xC2; 
+//     config[2] = 0x83; 
+//     write(file, config, 3);
+// }
 
-void getpH() {
-    char reg[1] = {CONVERSION_REG};
-    write(file, reg, 1);
-    usleep(8000);
+// void getpH() {
+//     char reg[1] = {CONVERSION_REG};
+//     write(file, reg, 1);
+//     usleep(8000);
 
-    char data[2] = {0};
-    if (read(file, data, 2) != 2){
-        perror("Failed to read from the i2c bus");
-        exit(1);
-    }else{
-        int raw_adc = (data[0] << 8) | data[1];
-        if (raw_adc > 0x7FFF) {
-            raw_adc -= 0x10000;
-        }
-        float voltage = raw_adc * 4.096 / 32768.0;
-        float pH_val = (voltage - 2.5) * 3.5;
-        float abs_pH = fabs(pH_val);
-        return pH_val;
-    }
-}
+//     char data[2] = {0};
+//     if (read(file, data, 2) != 2){
+//         perror("Failed to read from the i2c bus");
+//         exit(1);
+//     }else{
+//         int raw_adc = (data[0] << 8) | data[1];
+//         if (raw_adc > 0x7FFF) {
+//             raw_adc -= 0x10000;
+//         }
+//         float voltage = raw_adc * 4.096 / 32768.0;
+//         float pH_val = (voltage - 2.5) * 3.5;
+//         float abs_pH = fabs(pH_val);
+//         return pH_val;
+//     }
+// }
 
-void getTemperature() {
+float getTemperature() {
     
     const char *sensor_temperature = "/sys/bus/w1/devices/28-3ce1d4434496/w1_slave";
     FILE *fp;
@@ -116,38 +114,105 @@ void getTemperature() {
     char *temp_str;
     float temp;
 
-    if ((fp = fopen(sensor_file, "r")) == NULL) {
+    if ((fp = fopen(sensor_temperature, "r")) == NULL) {
         perror("Failed to open sensor file");
-        return;
+        return -1;
     }
 
     if (fread(buf, sizeof(char), 256, fp) < 1) {
         perror("Failed to read sensor file");
         fclose(fp);
-        return;
+        return -1;
     }
 
     fclose(fp);
 
     if ((temp_str = strstr(buf, "t=")) == NULL) {
         fprintf(stderr, "Failed to find temperature in sensor file\n");
-        return;
+        return -1;
     }
 
     temp_str += 2;
     temp = strtof(temp_str, NULL);
-    temp /= 1000;
+    return temp / 1000;
 
-    return temp;
-
-    // printf("Temperature: %.3f *C\n", temp);
-    // if (temp > 32.0) {
-    //     digitalWrite(LED_PIN, HIGH);
-    //     delay(200);
-    // } else {
-    //     digitalWrite(LED_PIN, LOW);
-    // }
 }
+
+// void initPWM() {
+//     // Cấu hình kênh PWM cho van acid
+//     ledc_timer_config_t ledc_timer = {
+//         .duty_resolution = LEDC_TIMER_13_BIT,
+//         .freq_hz = 5000,                       
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .timer_num = LEDC_TIMER_0
+//     };
+//     ledc_timer_config(&ledc_timer);
+
+//     ledc_channel_config_t ledc_channel = {
+//         .channel = LEDC_CHANNEL_0,
+//         .duty = 0,
+//         .gpio_num = 1,              //           
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .hpoint = 0,
+//         .timer_sel = LEDC_TIMER_0
+//     };
+//     ledc_channel_config(&ledc_channel);
+
+//         // Cấu hình kênh PWM cho van bazo
+//     ledc_timer_config_t ledc_timer = {
+//         .duty_resolution = LEDC_TIMER_13_BIT,
+//         .freq_hz = 5000,                       
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .timer_num = LEDC_TIMER_0
+//     };
+//     ledc_timer_config(&ledc_timer);
+
+//     ledc_channel_config_t ledc_channel = {
+//         .channel = LEDC_CHANNEL_0,
+//         .duty = 0,
+//         .gpio_num = 1,              //           
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .hpoint = 0,
+//         .timer_sel = LEDC_TIMER_0
+//     };
+//     ledc_channel_config(&ledc_channel);
+//         // Cấu hình kênh PWM cho peltier nong
+//     ledc_timer_config_t ledc_timer = {
+//         .duty_resolution = LEDC_TIMER_13_BIT,
+//         .freq_hz = 5000,                       
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .timer_num = LEDC_TIMER_0
+//     };
+//     ledc_timer_config(&ledc_timer);
+
+//     ledc_channel_config_t ledc_channel = {
+//         .channel = LEDC_CHANNEL_0,
+//         .duty = 0,
+//         .gpio_num = 1,              //           
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .hpoint = 0,
+//         .timer_sel = LEDC_TIMER_0
+//     };
+//     ledc_channel_config(&ledc_channel);
+//         // Cấu hình kênh PWM cho peltier lanh
+//     ledc_timer_config_t ledc_timer = {
+//         .duty_resolution = LEDC_TIMER_13_BIT,
+//         .freq_hz = 5000,                       
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .timer_num = LEDC_TIMER_0
+//     };
+//     ledc_timer_config(&ledc_timer);
+
+//     ledc_channel_config_t ledc_channel = {
+//         .channel = LEDC_CHANNEL_0,
+//         .duty = 0,
+//         .gpio_num = 1,              //           
+//         .speed_mode = LEDC_HIGH_SPEED_MODE,
+//         .hpoint = 0,
+//         .timer_sel = LEDC_TIMER_0
+//     };
+//     ledc_channel_config(&ledc_channel);
+// }
 
 
 int min(int a, int b) {
@@ -158,88 +223,13 @@ int max(int a, int b) {
     return a > b ? a : b;
 }
 
-void initPWM() {
-    // Cấu hình kênh PWM cho van acid
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_13_BIT,
-        .freq_hz = 5000,                       
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0
-    };
-    ledc_timer_config(&ledc_timer);
-
-    ledc_channel_config_t ledc_channel = {
-        .channel = LEDC_CHANNEL_0,
-        .duty = 0,
-        .gpio_num = 1,              //           
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .hpoint = 0,
-        .timer_sel = LEDC_TIMER_0
-    };
-    ledc_channel_config(&ledc_channel);
-
-        // Cấu hình kênh PWM cho van bazo
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_13_BIT,
-        .freq_hz = 5000,                       
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0
-    };
-    ledc_timer_config(&ledc_timer);
-
-    ledc_channel_config_t ledc_channel = {
-        .channel = LEDC_CHANNEL_0,
-        .duty = 0,
-        .gpio_num = 1,              //           
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .hpoint = 0,
-        .timer_sel = LEDC_TIMER_0
-    };
-    ledc_channel_config(&ledc_channel);
-        // Cấu hình kênh PWM cho peltier nong
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_13_BIT,
-        .freq_hz = 5000,                       
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0
-    };
-    ledc_timer_config(&ledc_timer);
-
-    ledc_channel_config_t ledc_channel = {
-        .channel = LEDC_CHANNEL_0,
-        .duty = 0,
-        .gpio_num = 1,              //           
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .hpoint = 0,
-        .timer_sel = LEDC_TIMER_0
-    };
-    ledc_channel_config(&ledc_channel);
-        // Cấu hình kênh PWM cho peltier lanh
-    ledc_timer_config_t ledc_timer = {
-        .duty_resolution = LEDC_TIMER_13_BIT,
-        .freq_hz = 5000,                       
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .timer_num = LEDC_TIMER_0
-    };
-    ledc_timer_config(&ledc_timer);
-
-    ledc_channel_config_t ledc_channel = {
-        .channel = LEDC_CHANNEL_0,
-        .duty = 0,
-        .gpio_num = 1,              //           
-        .speed_mode = LEDC_HIGH_SPEED_MODE,
-        .hpoint = 0,
-        .timer_sel = LEDC_TIMER_0
-    };
-    ledc_channel_config(&ledc_channel);
-}
-
 void get_system_inputs() {
     IOType *sensor_input = System_Inputs;
     while(sensor_input != NULL) {
-        if(strcmp(sensor_input->name, "pH") == 0) {
-            sensor_input->value = getpH();
-        } else if(strcmp(temp_input->name, "Temperature") == 0) {
+        // if(strcmp(sensor_input->name, "pH") == 0) {
+        //     sensor_input->value = getpH();
+        // } else 
+        if(strcmp(sensor_input->name, "Temperature") == 0) {
             sensor_input->value = getTemperature();
         }
         sensor_input = sensor_input->next;
@@ -297,33 +287,33 @@ int compute_area_of_trapezoid(MFType *mf) {
  Check the slope again 
 */
 void initialize_system() {
-    IOType *pH = malloc(sizeof(IOType));
-    strcpy(pH->name, "pH"); //
-    pH->value = 0;
+    // IOType *pH = malloc(sizeof(IOType));
+    // strcpy(pH->name, "pH"); //
+    // pH->value = 0;
     
-    MFType *low = malloc(sizeof(MFType));
-    strcpy(low->name, "Low");
-    low->point1 = 0; low->point2 = 7;
-    low->slope1 = 1; low->slope2 = 1;
+    // MFType *low = malloc(sizeof(MFType));
+    // strcpy(low->name, "Low");
+    // low->point1 = 0; low->point2 = 7;
+    // low->slope1 = 1; low->slope2 = 1;
     
-    MFType *high = malloc(sizeof(MFType));
-    strcpy(high->name, "High");
-    high->point1 = 8; high->point2 = 14;
-    high->slope1 = 1; high->slope2 = 1;
+    // MFType *high = malloc(sizeof(MFType));
+    // strcpy(high->name, "High");
+    // high->point1 = 8; high->point2 = 14;
+    // high->slope1 = 1; high->slope2 = 1;
     
-    MFType *normal_ph = malloc(sizeof(MFType));
-    strcpy(normal_ph->name, "Normal");
-    normal_ph->point1 = 7; normal_ph->point2 = 8;
-    normal_ph->slope1 = 1; normal_ph->slope2 = 1;
+    // MFType *normal_ph = malloc(sizeof(MFType));
+    // strcpy(normal_ph->name, "Normal");
+    // normal_ph->point1 = 7; normal_ph->point2 = 8;
+    // normal_ph->slope1 = 1; normal_ph->slope2 = 1;
 
-    low->next = normal_ph;
-    normal_ph->next = high;
-    high->next = NULL;
+    // low->next = normal_ph;
+    // normal_ph->next = high;
+    // high->next = NULL;
 
-    pH->membership_functions = low;
-    pH->next = NULL;
+    // pH->membership_functions = low;
+    // pH->next = NULL;
 
-    System_Inputs = pH;
+    // System_Inputs = pH;
 
     IOType *temperature = malloc(sizeof(IOType));
     strcpy(temperature->name, "Temperature");
@@ -351,7 +341,7 @@ void initialize_system() {
     temperature->membership_functions = cold;
     temperature->next = NULL;
 
-    pH->next = temperature;
+   // pH->next = temperature;
 
     // Initialize outputs (e.g., valve acid and valve bazo) and their membership functions
 
@@ -405,7 +395,7 @@ void defuzzification(){
 
         defuzzifiedOutputs[index] = so->value;
     }
-    controlDevices(defuzzifiedOutputs[0], defuzzifiedOutputs[1], defuzzifiedOutputs[2], defuzzifiedOutputs[3]);
+    // controlDevices(defuzzifiedOutputs[0], defuzzifiedOutputs[1], defuzzifiedOutputs[2], defuzzifiedOutputs[3]);
 }
 
 void put_system_outputs() {
@@ -418,26 +408,26 @@ void put_system_outputs() {
 
 void controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput, int coolerOutput) {
     if (valveAcidOutput > 0) {
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0, valveAcidOutput);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0);
+        // ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0, valveAcidOutput);
+        // ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0);
     } else {
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0, 0);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0);
+        // ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0, 0);
+        // ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_0);
     }
 
     if (valveBazoOutput > 0) {
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, valveBazoOutput);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1);
+        // ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1, valveBazoOutput);
+        // ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_1);
     }
 
     if (heaterOutput > 0) {
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, heaterOutput);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2);
+        // ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2, heaterOutput);
+        // ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_2);
     }
 
     if (coolerOutput > 0) {
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_3, coolerOutput);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_3);
+        // ledc_set_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_3, coolerOutput);
+        // ledc_update_duty(LEDC_HIGH_SPEED_MODE, LEDC_CHANNEL_3);
     }
 }
 
@@ -465,8 +455,8 @@ void fuzzy_main(){
 
 int main() {
 
-    int file = i2c_init((char*)"/dev/i2c-1");
-    ads1115_configure(file);
+    // int file = i2c_init((char*)"/dev/i2c-1");
+    // ads1115_configure(file);
     //getTemperature();
 
     initialize_system();
