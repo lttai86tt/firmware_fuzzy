@@ -115,18 +115,12 @@ void initGPIO()
     pinMode(GPIO_VALVE_BAZO, OUTPUT);
     pinMode(GPIO_HEATER, OUTPUT);
     pinMode(GPIO_COOLER, OUTPUT);
-}
 
-// pwm signal level control
-void controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput, int coolerOutput)
-{
-    softPwmWrite(GPIO_VALVE_ACID, valveAcidOutput);
-    softPwmWrite(GPIO_VALVE_BAZO, valveBazoOutput);
-    softPwmWrite(GPIO_HEATER, heaterOutput);
-    softPwmWrite(GPIO_COOLER, coolerOutput);
-
-    printf("Valve Acid PWM: %d, Valve Bazo PWM: %d, Heater PWM: %d, Cooler PWM: %d\n",
-           valveAcidOutput, valveBazoOutput, heaterOutput, coolerOutput);
+    softPwmCreate(GPIO_VALVE_ACID, 0, 100);
+    softPwmCreate(GPIO_VALVE_BAZO, 0, 100);
+    softPwmCreate(GPIO_HEATER, 0, 100);
+    softPwmCreate(GPIO_COOLER, 0, 100);
+    
 }
 
 int min(int a, int b)
@@ -139,6 +133,7 @@ int max(int a, int b)
     return a > b ? a : b;
 }
 
+//get input value on to the program
 void get_system_inputs()
 {
     IOType *sensor_input = System_Inputs;
@@ -435,6 +430,19 @@ int clamp(int value, int min, int max)
         return max;
     return value;
 }
+
+// pwm signal level control
+void  controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput, int coolerOutput)
+{
+    softPwmWrite(GPIO_VALVE_ACID, clamp(valveAcidOutput, 0, 100));
+    softPwmWrite(GPIO_VALVE_BAZO, clamp(valveBazoOutput, 0, 100));
+    softPwmWrite(GPIO_HEATER, clamp(heaterOutput, 0, 100));
+    softPwmWrite(GPIO_COOLER, clamp(coolerOutput, 0, 100));
+
+    printf("Valve Acid PWM: %d, Valve Bazo PWM: %d, Heater PWM: %d, Cooler PWM: %d\n",
+           valveAcidOutput, valveBazoOutput, heaterOutput, coolerOutput);
+}
+
 
 void fuzzy_main()
 {
