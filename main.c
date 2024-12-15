@@ -1,4 +1,24 @@
 
+
+/*
+* PWM init for controller
+* Add pH sensor input
+* Add PWM Control on each device (Valve + Peltier)
+* (Unsure)  fuzzy_main
+* (Unsure)  Initialize the system inputs and their membership functions
+* Compute the degree of menbership of the input to the membership function
+
+  Mức độ thành viên (y)
+    1 |     ________
+      |    /        \
+      |   /          \
+      |  /            \
+      | /              \
+    0 |/_____________________________
+      0   point1    point2    Giá trị đầu vào (x)
+
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -10,11 +30,13 @@
 #include <softPwm.h>
 #include <wiringPi.h>
 
+/* Need to be configured after */
 #define GPIO_VALVE_ACID 1 // GPIO cho van acid
 #define GPIO_VALVE_BAZO 2 // GPIO cho van bazo
 #define GPIO_HEATER 3     // GPIO cho hot peltier
 #define GPIO_COOLER 4     // GPIO cho cool peltier
 
+/* Use for pH sensor */
 // #define ADS1115_ADDRESS 0x48
 // #define CONFIG_REG 0x01
 // #define CONVERSION_REG 0x00
@@ -24,6 +46,7 @@
 // #define CONFIG_START_SINGLE 0x8000
 // #define CONFIG_DR_128SPS 0x0080
 // #define CONFIG_COMP_QUE_DISABLE 0x0003
+
 #define MAXNAME 10
 #define UPPER_LIMIT 255
 
@@ -49,9 +72,6 @@ typedef struct io_type
     struct io_type *next;
 } IOType;
 
-IOType *System_Inputs = NULL;
-IOType *System_Outputs = NULL;
-
 typedef struct rule_element_type
 {
     int *value;
@@ -66,13 +86,18 @@ typedef struct rule_type
 } RuleType;
 
 RuleType *Rule_Base = NULL;
+IOType *System_Inputs = NULL;
+IOType *System_Outputs = NULL;
 
 int valveAcidOutput = 0;
 int valveBazoOutput = 0;
 int heaterOutput = 0;
 int coolerOutput = 0;
 
-float getTemperature()
+int min(int a, int b) { return a < b ? a : b; }
+int max(int a, int b) { return a > b ? a : b; }
+
+float get_Temperature()
 {
 
     const char *sensor_temperature = "/sys/bus/w1/devices/28-3ce1d4434496/w1_slave";
@@ -107,6 +132,12 @@ float getTemperature()
     return temp / 1000;
 }
 
+/* Missing get_pHsensor*/
+float get_pHsensor()
+{
+}
+
+/* UNSURE: Need to check if this is correct */
 void initGPIO()
 {
     wiringPiSetup();
@@ -120,20 +151,9 @@ void initGPIO()
     softPwmCreate(GPIO_VALVE_BAZO, 0, 100);
     softPwmCreate(GPIO_HEATER, 0, 100);
     softPwmCreate(GPIO_COOLER, 0, 100);
-    
 }
 
-int min(int a, int b)
-{
-    return a < b ? a : b;
-}
-
-int max(int a, int b)
-{
-    return a > b ? a : b;
-}
-
-//get input value on to the program
+// get input value on to the program
 void get_system_inputs()
 {
     IOType *sensor_input = System_Inputs;
@@ -141,24 +161,16 @@ void get_system_inputs()
     {
         if (strcmp(sensor_input->name, "Temperature") == 0)
         {
-            sensor_input->value = getTemperature();
+            sensor_input->value = get_Temperature();
+        }
+        else if (strcmp(sensor_input->name, "pH") == 0)
+        {
+            // sensor_input->value = get_pHsensor();
         }
         sensor_input = sensor_input->next;
     }
 }
 
-/*
-  Compute the degree of menbership of the input to the membership function
-
-  Mức độ thành viên (y)
-    1 |     ________
-      |    /        \
-      |   /          \
-      |  /            \
-      | /              \
-    0 |/_____________________________
-      0   point1    point2    Giá trị đầu vào (x)
-*/
 void compute_degree_of_membership(MFType *mf, int input)
 {
     int delta_1;
@@ -193,167 +205,6 @@ int compute_area_of_trapezoid(MFType *mf)
 
     area = mf->value * (base + top) / 2;
     return area > 0 ? area : 0;
-}
-
-/*
- Initialize the system inputs and their membership functions
- Check the slope again
-*/
-void initialize_system()
-{
-
-    IOType *temperature = malloc(sizeof(IOType));
-    strcpy(temperature->name, "Temperature");
-    temperature->value = 0;
-
-    MFType *cold = malloc(sizeof(MFType));
-    strcpy(cold->name, "Cold");
-    cold->point1 = 0;
-    cold->point2 = 25;
-    cold->slope1 = 1;
-    cold->slope2 = 1;
-
-    MFType *hot = malloc(sizeof(MFType));
-    strcpy(hot->name, "Hot");
-    hot->point1 = 30;
-    hot->point2 = 40;
-    hot->slope1 = 1;
-    hot->slope2 = 1;
-
-    MFType *normal_temp = malloc(sizeof(MFType));
-    strcpy(normal_temp->name, "Normal");
-    normal_temp->point1 = 25;
-    normal_temp->point2 = 30;
-    normal_temp->slope1 = 1;
-    normal_temp->slope2 = 1;
-
-    cold->next = normal_temp;
-    normal_temp->next = hot;
-    hot->next = NULL;
-
-    temperature->membership_functions = cold;
-    temperature->next = NULL;
-    System_Inputs = temperature;
-
-    // initialization output
-    IOType *valveAcid = malloc(sizeof(IOType));
-    strcpy(valveAcid->name, "ValveAcid");
-    valveAcid->value = 0;
-
-    MFType *lowAcid = malloc(sizeof(MFType));
-    strcpy(lowAcid->name, "LowAcid");
-    lowAcid->point1 = 0;
-    lowAcid->point2 = 50;
-    lowAcid->slope1 = 1;
-    lowAcid->slope2 = 1;
-
-    MFType *highAcid = malloc(sizeof(MFType));
-    strcpy(highAcid->name, "HighAcid");
-    highAcid->point1 = 50;
-    highAcid->point2 = 100;
-    highAcid->slope1 = 1;
-    highAcid->slope2 = 1;
-
-    lowAcid->next = highAcid;
-    highAcid->next = NULL;
-
-    valveAcid->membership_functions = lowAcid;
-    valveAcid->next = NULL;
-
-    IOType *valveBazo = malloc(sizeof(IOType));
-    strcpy(valveBazo->name, "ValveBazo");
-    valveBazo->value = 0;
-
-    MFType *lowBazo = malloc(sizeof(MFType));
-    strcpy(lowBazo->name, "LowBazo");
-    lowBazo->point1 = 0;
-    lowBazo->point2 = 50;
-    lowBazo->slope1 = 1;
-    lowBazo->slope2 = 1;
-
-    MFType *highBazo = malloc(sizeof(MFType));
-    strcpy(highBazo->name, "HighBazo");
-    highBazo->point1 = 50;
-    highBazo->point2 = 100;
-    highBazo->slope1 = 1;
-    highBazo->slope2 = 1;
-
-    lowBazo->next = highBazo;
-    highBazo->next = NULL;
-
-    valveBazo->membership_functions = lowBazo;
-    valveBazo->next = NULL;
-    System_Outputs = valveAcid;
-
-    IOType *heater = malloc(sizeof(IOType));
-    strcpy(heater->name, "Heater");
-    heater->value = 0;
-
-    MFType *lowHeat = malloc(sizeof(MFType));
-    strcpy(lowHeat->name, "LowHeat");
-    lowHeat->point1 = 0;
-    lowHeat->point2 = 50;
-    lowHeat->slope1 = 1;
-    lowHeat->slope2 = 1;
-
-    MFType *highHeat = malloc(sizeof(MFType));
-    strcpy(highHeat->name, "HighHeat");
-    highHeat->point1 = 50;
-    highHeat->point2 = 100;
-    highHeat->slope1 = 1;
-    highHeat->slope2 = 1;
-
-    lowHeat->next = highHeat;
-    highHeat->next = NULL;
-
-    heater->membership_functions = lowHeat;
-    heater->next = NULL;
-
-    IOType *cooler = malloc(sizeof(IOType));
-    strcpy(cooler->name, "Cooler");
-    cooler->value = 0;
-
-    MFType *lowCool = malloc(sizeof(MFType));
-    strcpy(lowCool->name, "LowCool");
-    lowCool->point1 = 0;
-    lowCool->point2 = 50;
-    lowCool->slope1 = 1;
-    lowCool->slope2 = 1;
-
-    MFType *highCool = malloc(sizeof(MFType));
-    strcpy(highCool->name, "HighCool");
-    highCool->point1 = 50;
-    highCool->point2 = 100;
-    highCool->slope1 = 1;
-    highCool->slope2 = 1;
-
-    lowCool->next = highCool;
-    highCool->next = NULL;
-
-    cooler->membership_functions = lowCool;
-    cooler->next = NULL;
-
-    valveAcid->next = valveBazo;
-    valveBazo->next = heater;
-    heater->next = cooler;
-    System_Outputs = valveAcid;
-
-    // rules
-    RuleType *rule1 = malloc(sizeof(RuleType));
-    RuleElementType *if_temp = malloc(sizeof(RuleElementType));
-    RuleElementType *then_acid = malloc(sizeof(RuleElementType));
-
-    if_temp->value = cold;
-    if_temp->next = NULL;
-
-    then_acid->value = lowAcid;
-    then_acid->next = NULL;
-
-    rule1->if_side = if_temp;
-    rule1->then_side = then_acid;
-    rule1->next = NULL;
-
-    Rule_Base = rule1;
 }
 
 // precise numerical values
@@ -431,8 +282,11 @@ int clamp(int value, int min, int max)
     return value;
 }
 
-// pwm signal level control
-void  controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput, int coolerOutput)
+/*
+ * Unsure: need to check that it controls devices
+ * pwm signal level control
+ */
+void controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput, int coolerOutput)
 {
     softPwmWrite(GPIO_VALVE_ACID, clamp(valveAcidOutput, 0, 100));
     softPwmWrite(GPIO_VALVE_BAZO, clamp(valveBazoOutput, 0, 100));
@@ -443,15 +297,206 @@ void  controlDevices(int valveAcidOutput, int valveBazoOutput, int heaterOutput,
            valveAcidOutput, valveBazoOutput, heaterOutput, coolerOutput);
 }
 
+/*
+ Initialize the system inputs and their membership functions
+ Check the slope again
+*/
+void initialize_system()
+{
+    // INPUT: Temperature rule
+    IOType *temperature = malloc(sizeof(IOType));
+    strcpy(temperature->name, "Temperature");
+    temperature->value = 0;
+
+    MFType *cold = malloc(sizeof(MFType));
+    strcpy(cold->name, "Cold");
+    cold->point1 = 0; cold->point2 = 25;
+    cold->slope1 = 1; cold->slope2 = 1;
+
+    MFType *hot = malloc(sizeof(MFType));
+    strcpy(hot->name, "Hot");
+    hot->point1 = 30; hot->point2 = 40;
+    hot->slope1 = 1; hot->slope2 = 1;
+
+    MFType *normal_temp = malloc(sizeof(MFType));
+    strcpy(normal_temp->name, "Normal");
+    normal_temp->point1 = 25; normal_temp->point2 = 30;
+    normal_temp->slope1 = 1; normal_temp->slope2 = 1;
+
+    cold->next = normal_temp;
+    normal_temp->next = hot;
+    hot->next = NULL;
+
+    temperature->membership_functions = cold;
+    temperature->next = NULL;
+    System_Inputs = temperature;
+
+    // INPUT: pH rule
+    /*
+
+    */
+
+    // OUTPUT: Valve Acid rule
+    IOType *valveAcid = malloc(sizeof(IOType));
+    strcpy(valveAcid->name, "ValveAcid");
+    valveAcid->value = 0;
+
+    MFType *lowAcid = malloc(sizeof(MFType));
+    strcpy(lowAcid->name, "LowAcid");
+    lowAcid->point1 = 0; lowAcid->point2 = 50;
+    lowAcid->slope1 = 1; lowAcid->slope2 = 1;
+
+    MFType *highAcid = malloc(sizeof(MFType));
+    strcpy(highAcid->name, "HighAcid");
+    highAcid->point1 = 50; highAcid->point2 = 100;
+    highAcid->slope1 = 1; highAcid->slope2 = 1;
+
+    lowAcid->next = highAcid;
+    highAcid->next = NULL;
+
+    valveAcid->membership_functions = lowAcid;
+    valveAcid->next = NULL;
+    //System_Outputs = valveAcid;
+
+    // OUTPUT: Valve Bazo rule
+    IOType *valveBazo = malloc(sizeof(IOType));
+    strcpy(valveBazo->name, "ValveBazo");
+    valveBazo->value = 0;
+
+    MFType *lowBazo = malloc(sizeof(MFType));
+    strcpy(lowBazo->name, "LowBazo");
+    lowBazo->point1 = 0; lowBazo->point2 = 50;
+    lowBazo->slope1 = 1; lowBazo->slope2 = 1;
+
+    MFType *highBazo = malloc(sizeof(MFType));
+    strcpy(highBazo->name, "HighBazo");
+    highBazo->point1 = 50; highBazo->point2 = 100;
+    highBazo->slope1 = 1; highBazo->slope2 = 1;
+ 
+    lowBazo->next = highBazo;
+    highBazo->next = NULL;
+
+    valveBazo->membership_functions = lowBazo;
+    valveBazo->next = valveAcid;
+    //System_Outputs = valveBazo;
+
+    // OUTPUT: Heater peltier rule
+    IOType *heater = malloc(sizeof(IOType));
+    strcpy(heater->name, "Heater");
+    heater->value = 0;
+
+    MFType *lowHeat = malloc(sizeof(MFType));
+    strcpy(lowHeat->name, "LowHeat");
+    lowHeat->point1 = 0; lowHeat->point2 = 50;
+    lowHeat->slope1 = 1; lowHeat->slope2 = 1;
+
+    MFType *highHeat = malloc(sizeof(MFType));
+    strcpy(highHeat->name, "HighHeat");
+    highHeat->point1 = 50; highHeat->point2 = 100;
+    highHeat->slope1 = 1; highHeat->slope2 = 1;
+
+    lowHeat->next = highHeat;
+    highHeat->next = NULL;
+
+    heater->membership_functions = lowHeat;
+    heater->next = valveBazo;
+    //System_Outputs = heater;
+
+    // OUTPUT: Cooler peltier rule
+    IOType *cooler = malloc(sizeof(IOType));
+    strcpy(cooler->name, "Cooler");
+    cooler->value = 0;
+
+    MFType *lowCool = malloc(sizeof(MFType));
+    strcpy(lowCool->name, "LowCool");
+    lowCool->point1 = 0; lowCool->point2 = 50;
+    lowCool->slope1 = 1; lowCool->slope2 = 1;
+
+    MFType *highCool = malloc(sizeof(MFType));
+    strcpy(highCool->name, "HighCool");
+    highCool->point1 = 50; highCool->point2 = 100;
+    highCool->slope1 = 1; highCool->slope2 = 1;
+
+    lowCool->next = highCool;
+    highCool->next = NULL;
+
+    cooler->membership_functions = lowCool;
+    cooler->next = heater;
+    System_Outputs = cooler;
+
+    // RULE: Nếu Temperature là Cold thì bật Heater
+    RuleType *rule1 = malloc(sizeof(RuleType));
+    RuleElementType *if_temp_cold = malloc(sizeof(RuleElementType));
+    RuleElementType *then_heater_on = malloc(sizeof(RuleElementType));
+
+    if_temp_cold->value = cold;
+    if_temp_cold->next = NULL;
+
+    then_heater_on->value = lowHeat;
+    then_heater_on->next = NULL;
+
+    rule1->if_side = if_temp_cold;
+    rule1->then_side = then_heater_on;
+
+    // RULE: Nếu Temperature là Hot thì bật Cooler
+    RuleType *rule2 = malloc(sizeof(RuleType));
+    RuleElementType *if_temp_hot = malloc(sizeof(RuleElementType));
+    RuleElementType *then_cooler_on = malloc(sizeof(RuleElementType));
+
+    if_temp_hot->value = hot;
+    if_temp_hot->next = NULL;
+
+    then_cooler_on->value = lowCool;
+    then_cooler_on->next = NULL;
+
+    rule2->if_side = if_temp_hot;
+    rule2->then_side = then_cooler_on;
+
+    // RULE: Nếu pH là Low thì mở Valve Acid
+    RuleType *rule3 = malloc(sizeof(RuleType));
+    RuleElementType *if_ph_low = malloc(sizeof(RuleElementType));
+    RuleElementType *then_valve_acid_on = malloc(sizeof(RuleElementType));
+
+    if_ph_low->value = low_pH;
+    if_ph_low->next = NULL;
+
+    then_valve_acid_on->value = lowAcid;
+    then_valve_acid_on->next = NULL;
+
+    rule3->if_side = if_ph_low;
+    rule3->then_side = then_valve_acid_on;
+
+    // RULE: Nếu pH là High thì mở Valve Bazo
+    RuleType *rule4 = malloc(sizeof(RuleType));
+    RuleElementType *if_ph_high = malloc(sizeof(RuleElementType));
+    RuleElementType *then_valve_bazo_on = malloc(sizeof(RuleElementType));
+
+    if_ph_high->value = high_pH;
+    if_ph_high->next = NULL;
+
+    then_valve_bazo_on->value = lowBazo;
+    then_valve_bazo_on->next = NULL;
+
+    rule4->if_side = if_ph_high;
+    rule4->then_side = then_valve_bazo_on;
+
+    // Kết nối các quy tắc vào danh sách
+    rule1->next = rule2;
+    rule2->next = rule3;
+    rule3->next = rule4;
+    rule4->next = NULL;
+
+    Rule_Base = rule1; // Đặt rule1 làm đầu danh sách rule
+}
 
 void fuzzy_main()
 {
     while (1)
     {
-        fuzzification();   // handle input value -> Language variables
-        rule_evaluation(); // if-then statement
-        defuzzification(); // take the output and convert to crip control signal (can be use to control the system)
-        put_system_outputs(); //update on display the current output value (for debug)
+        fuzzification();      // handle input value -> Language variables
+        rule_evaluation();    // if-then statement
+        defuzzification();    // take the output and convert to crip control signal (can be use to control the system)
+        put_system_outputs(); // update on display the current output value (for debug)
 
         // control devices
         controlDevices(
@@ -466,7 +511,6 @@ void fuzzy_main()
 
 int main()
 {
-
     initGPIO();
     initialize_system();
     fuzzy_main();
